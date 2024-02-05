@@ -1,0 +1,1 @@
+some implementation of web scrapping concept, uses 2 way, first with traditional xhr request, second with headless browser

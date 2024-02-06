@@ -9,7 +9,15 @@ const db = {
             database: 'kpop'
         })
     },
-    query(sql, callback = null, closeConnection = true ) {
+    pool() {
+        return mysql.createPool({
+            host: 'localhost',
+            user: 'root',
+            password: '',
+            database: 'kpop'
+        })
+    },
+    query(query, param = null,  callback = null, closeConnection = true ) {
 
         const connection = this.connect()
 
@@ -21,15 +29,13 @@ const db = {
             if(err) throw err
             console.log('connected to database')
 
-            connection.query(sql, (err, result) => {
+            connection.query(query, param, (err, result) => {
 
                 if(err) throw err
 
+                if( closeConnection === true ) { connection.end() }
                 if(typeof callback == 'function') {
                     callback(result)
-                }
-                if(closeConnection === true) {
-                    connection.end()
                 }
             })
 

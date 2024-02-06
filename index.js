@@ -23,7 +23,7 @@ const db = require('./db')
  * @readonly
  * @enum {string}
  */
-const GroupType = {
+export const GroupType = {
   GIRL_GROUP: 'girl group',
   BOY_GROUP: 'boy group',
 }

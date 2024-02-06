@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "sp": "node crawl-puppeteer.js"
+    "start:puppeteer": "node crawl-puppeteer.js",
+    "start:crawl": "node index.js"
   },
   "keywords": [],
   "author": "",

@@ -26,7 +26,7 @@ async function scrapeWebsite(dest) {
 
             // document.querySelectorAll("tr[id*='table_6_row_*']").forEach((element) => {
             document.querySelectorAll("tr").forEach((element) => {
-                const profileLink = element.querySelector('a.column-group_name')?.href ?? null;
+                const profileLink = element.querySelector('a')?.href ?? null;
                 const groupName = element.querySelector('td.column-group_name')?.textContent.trim() ?? null
                 const agency = element.querySelector('td.column-company')?.textContent.trim() ?? null
                 const debutYear = element.querySelector('td.column-debut')?.textContent.trim() ?? null
@@ -78,6 +78,9 @@ scrapeWebsite(destination).then(async (result) => {
     // Filter out data where agency dan group name is null
     const filteredData = result.filter(item => item.agency !== null && item.name !== null);
 
+    // console.log(filteredData[0])
+    // return
+
     // Group the filtered data by agency
     const groupedData = filteredData.reduce((acc, currentItem) => {
         const { agency } = currentItem;
@@ -98,7 +101,7 @@ scrapeWebsite(destination).then(async (result) => {
                         const member = groupedData[v.name]
                         member.map((d) => {
                             if(d.done == true) return
-                            const statement = `INSERT INTO \`groups\` (\`name\`, \`type\`, \`debutYear\`, \`memberCount\`, \`agency_id\`) VALUES ("${d.name}", '${d.type}', '${d.debutYear}', '${d.memberCount}', '${v.id}' )`
+                            const statement = `INSERT INTO \`groups\` (\`name\`, \`type\`, \`debutYear\`, \`memberCount\`, \`agency_id\`, \`profile_link\`) VALUES ("${d.name}", '${d.type}', '${d.debutYear}', '${d.memberCount}', '${v.id}', '${d.profile}' )`
                             conn.query(statement, (err, result) => {
                                 if(err) throw err
                                 console.log(result)

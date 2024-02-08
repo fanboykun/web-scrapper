@@ -11,8 +11,11 @@ async function scrapeWebsite(dest) {
         await page.goto(dest.url);
 
         // Wait for the content to load
-        // await page.waitForSelector(dest.element);
-        await page.waitForSelector('table#table_1');
+        try {
+            await page.waitForSelector('table#table_1');
+        } catch(err) {
+            return false;
+        }
 
         
         // Extract the desired content
@@ -21,10 +24,6 @@ async function scrapeWebsite(dest) {
             // This function runs in the context of the browser
             // You can use standard DOM manipulation methods here
 
-            // const tdElement = document.querySelectorAll('td.column-company');
-            // return Array.from(tdElement).map(td => td.textContent.trim());
-
-            // document.querySelectorAll("tr[id*='table_6_row_*']").forEach((element) => {
             document.querySelectorAll("tr").forEach((element) => {
                 const profileLink = element.querySelector('a')?.href ?? null;
                 const groupName = element.querySelector('td.column-group_name')?.textContent.trim() ?? null
@@ -72,14 +71,26 @@ if( process.argv.indexOf('-u') > -1 ) {
 // }
       
 // Call the scrapeWebsite function to initiate the scraping process
-scrapeWebsite(destination).then(async (result) => {
+scrapeWebsite(destination)
+.then(async (result) => {
+    if(result == false) {
+        console.error('failed!')
+    }
+    const i = await processAgencyData(result)
+    if(i) {
+        console.log(i)
+    }
+}).then(() => {
+    console.log(`second process begin!`)
+});
+
+async function processAgencyData(result) {
+
     console.log(`result count: ${result.length}`)
 
     // Filter out data where agency dan group name is null
     const filteredData = result.filter(item => item.agency !== null && item.name !== null);
-
-    // console.log(filteredData[0])
-    // return
+    console.log(`filtered data  count: ${filteredData.length}`)
 
     // Group the filtered data by agency
     const groupedData = filteredData.reduce((acc, currentItem) => {
@@ -91,63 +102,81 @@ scrapeWebsite(destination).then(async (result) => {
         return acc;
     }, {});
     
-    if(groupedData) {
-        insertAgency(groupedData)
-        .then(() => {
-            getAgencies().then((res) => {
-                const conn = db.connect()
-                res.map(async(v, i) => {
-                    if(groupedData[v.name]) {
-                        const member = groupedData[v.name]
-                        member.map((d) => {
-                            if(d.done == true) return
-                            const statement = `INSERT INTO \`groups\` (\`name\`, \`type\`, \`debutYear\`, \`memberCount\`, \`agency_id\`, \`profile_link\`) VALUES ("${d.name}", '${d.type}', '${d.debutYear}', '${d.memberCount}', '${v.id}', '${d.profile}' )`
-                            conn.query(statement, (err, result) => {
-                                if(err) throw err
-                                console.log(result)
-                            })
-                            d.done = true
-                        })
+    if(!groupedData) return
+
+    const ag = await insertAgency(groupedData)
+    const res = await getAgencies()
+    if(res) {
+        const conn = db.connect()
+        const processedGroup = new Array
+        res.map((v, i) => {
+            console.log(`mapping through agency: ${v?.name}`)
+            if(groupedData[v.name]) {
+                const group = groupedData[v.name]
+                group.map( async (d) => {
+                    console.log(`mapping trough group: ${d?.name}`)
+                    if(d.done == true) return
+                    const resultId = await insertGroup(conn, d, v)
+                    if(resultId) {
+                        d.done = true
+                        return processedGroup.push(resultId)
                     }
                 })
-                conn.end()
-            })
+            }
         })
+        Promise.all(processedGroup)
+        conn.end()
+        console.log(`processing agency and group done!`)
+        return processedGroup
     }
+}
 
-    async function insertAgency(data) {
-        return new Promise((resolve, reject) => {
-            const values = Object.entries(data).map((v, i) => `('${v[0]}')`).join(', ')
-            const statement = `INSERT INTO \`agencies\` (\`name\`) VALUES ${values}`
-            const connection = db.connect()
-            if(!connection) return
-            connection.query(statement, (err, result) => {
-                if(err) {
-                    reject(err)
-                    throw err
-                }
-                resolve(true)
-            })
-            connection.end()
+async function insertAgency(data) {
+    return new Promise((resolve, reject) => {
+        const values = Object.entries(data).map((v, i) => `('${v[0]}')`).join(', ')
+        const statement = `INSERT INTO \`agencies\` (\`name\`) VALUES ${values}`
+        const connection = db.connect()
+        if(!connection) return
+        connection.query(statement, (err, result) => {
+            if(err) {
+                reject(err)
+                throw err
+            }
+            console.log('success inserting batch agency data')
+            resolve(true)
         })
-    }
+        connection.end()
+    })
+}
 
-    async function getAgencies(callback = null) {
-        return new Promise((resolve, reject) => {
-            const statement = 'SELECT * FROM `agencies`'
-            const connection = db.connect()
-            if(!connection) return
-            connection.query(statement, (err, result) => {
-                if(err) {
-                    reject(err)
-                    throw err
-                } 
-                resolve(result)
-                // if(typeof callback == 'function') {
-                //     callback(result)
-                // }
-            })
-            connection.end()
+async function getAgencies(callback = null) {
+    return new Promise((resolve, reject) => {
+        const statement = 'SELECT * FROM `agencies`'
+        const connection = db.connect()
+        if(!connection) return
+        connection.query(statement, (err, result) => {
+            if(err) {
+                reject(err)
+                throw err
+            } 
+            console.log(`retrieved agency data from the database`)
+            resolve(result)
         })
-    }
-});
+        connection.end()
+    })
+}
+
+async function insertGroup(conn, d, v) {
+    return new Promise((resolve, reject) => {
+        if(!conn) reject('no conection')
+        const statement = `INSERT INTO \`groups\` (\`name\`, \`type\`, \`debutYear\`, \`memberCount\`, \`agency_id\`, \`profile_link\`) VALUES ("${d.name}", '${d.type}', '${d.debutYear}', '${d.memberCount}', '${v.id}', '${d.profile == null ? '' : d.profile}' )`
+        conn.query(statement, (err, result) => {
+            if(err) {
+                reject(err)
+                throw err
+            } 
+            console.log(`inserted group data, id: ${result.insertId}`)
+            resolve(result.insertId)
+        })
+    })
+}
